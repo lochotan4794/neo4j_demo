@@ -12,7 +12,7 @@ url = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 username = os.getenv("NEO4J_USER", "neo4j")
 password = os.getenv("NEO4J_PASSWORD", "123456abc")
 neo4jVersion = os.getenv("NEO4J_VERSION", "")
-database = os.getenv("NEO4J_DATABASE", "food")
+database = os.getenv("NEO4J_DATABASE", "")
 
 port = os.getenv("PORT", 8089)
 
@@ -42,12 +42,27 @@ def get_index():
 def serialize_movie(movie):
     return {
         'id': movie['id'],
-        'title': movie['title'],
-        'summary': movie['summary'],
-        'released': movie['released'],
-        'duration': movie['duration'],
-        'rated': movie['rated'],
+        'title': movie['name'],
+        'summary': movie['category'],
+        'released': movie['unit_price'],
+        'duration': movie['status'],
+        'rated': movie['original_unit_price'],
         'tagline': movie['tagline']
+    }
+
+
+def serialize_res_item(res_item):
+    return {
+        'id': res_item['id'],
+        'title': res_item['name'],
+        'summary': res_item['category'],
+        'released': res_item['unit_price'],
+        'duration': res_item['status'],
+        'rated': res_item['original_unit_price'],
+        'tagline': res_item['max_quality'],
+        'created_time': res_item['created_time'],
+        'updated_time': res_item['updated_time']
+
     }
 
 
@@ -70,6 +85,7 @@ def get_graph():
     nodes = []
     rels = []
     i = 0
+    print(results)
     for record in results:
         nodes.append({"title": record["movie"], "label": "movie"})
         target = i
@@ -87,24 +103,21 @@ def get_graph():
                     mimetype="application/json")
 
 
-@app.route("/search")
-def get_search():
-    try:
-        q = request.args["q"]
-    except KeyError:
-        return []
-    else:
-        db = get_db()
-        results = db.read_transaction(lambda tx: list(tx.run("MATCH (movie:Movie) "
-                                                             "WHERE movie.title =~ $title "
-                                                             "RETURN movie", {
-                                                                 "title": "(?i).*" + q + ".*"}
-                                                             )))
-        return Response(dumps([serialize_movie(record['movie']) for record in results]),
-                        mimetype="application/json")
+@app.route("/food/<name>")
+def get_food(name):
+    db = get_db()
+
+    result = db.read_transaction(lambda tx: tx.run(
+        "MATCH (n:Restaurent_item{name:$name})"
+        "RETURN n.name as Name, n.name as Style", {
+            "name": name}
+    ).single())
+
+    return Response(dumps({"name_food": result['Name']}),
+                    mimetype="application/json")
 
 
-@app.route("/movie/<title>")
+@ app.route("/movie/<title>")
 def get_movie(title):
     db = get_db()
     result = db.read_transaction(lambda tx: tx.run("MATCH (movie:Movie {title:$title}) "
@@ -114,6 +127,7 @@ def get_movie(title):
                                                    "HEAD(SPLIT(TOLOWER(TYPE(r)), '_')), r.roles]) AS cast "
                                                    "LIMIT 1", {"title": title}).single())
 
+    print(result)
     return Response(dumps({"title": result['title'],
                            "cast": [serialize_cast(member)
                                     for member in result['cast']]}),
